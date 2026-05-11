@@ -34,6 +34,8 @@ processing:
   temperature: 0.3
   # Default meeting type (run: python -m src.cli types)
   default_type: default
+  # Prepend Hinglish transliteration-correction instructions before extraction
+  fix_hinglish: true
 
 output:
   notes_dir: notes
