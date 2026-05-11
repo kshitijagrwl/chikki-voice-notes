@@ -72,6 +72,11 @@ fi
 echo ""
 echo "[5/5] Building Chikki menu bar app..."
 cd menubar && bash build.sh
+
+echo ""
+echo "      Building chikki-syscap helper (system audio capture)..."
+swift build -c release --product chikki-syscap
+echo "      ✓ chikki-syscap built: $(pwd)/.build/release/chikki-syscap"
 cd "$SCRIPT_DIR"
 
 # ── Done ─────────────────────────────────────────────────────────────────────

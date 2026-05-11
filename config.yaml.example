@@ -4,6 +4,13 @@ recording:
   format: wav
   max_duration_minutes: 120
   recordings_dir: recordings
+  # Capture system audio (Zoom/Meet/Slack) alongside the mic via the
+  # chikki-syscap helper (ScreenCaptureKit). Requires Screen Recording
+  # permission. When false, only the mic is recorded.
+  system_audio: false
+  # mono = sum mic+system into a single channel for transcription (default).
+  # A stereo archive (L=mic, R=system) is always written alongside.
+  mix_mode: mono
 
 transcription:
   # Active engine: whisper | indicwhisper | parakeet
@@ -22,6 +29,16 @@ transcription:
     parakeet:
       model: senstella/parakeet-mlx
       description: "10x faster than Whisper, better noise robustness, English-only"
+
+diarization:
+  # Speaker diarization (pyannote/speaker-diarization-3.1). Requires a
+  # HuggingFace token in `.env` as HF_TOKEN, and acceptance of the model
+  # EULA at https://huggingface.co/pyannote/speaker-diarization-3.1.
+  # When enabled, transcript segments are labeled Speaker A, B, C…
+  enabled: false
+  # Optional hard constraints on the diarizer. null = auto-detect.
+  min_speakers: null
+  max_speakers: null
 
 processing:
   # LLM provider: gemini | openai | anthropic

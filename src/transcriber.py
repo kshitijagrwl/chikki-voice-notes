@@ -105,7 +105,7 @@ _ENGINES = {
 
 
 class Transcriber:
-    def __init__(self, engine: str = None):
+    def __init__(self, engine: str = None, diarize: bool | None = None):
         self._cfg = CONFIG["transcription"]
         self._engine_name = engine or self._cfg["engine"]
         self._language = self._cfg.get("language", "en")
@@ -118,6 +118,11 @@ class Transcriber:
             )
         self._model = engine_cfg["model"]
         self._engine_fn = _ENGINES[self._engine_name]
+
+        diar_cfg = CONFIG.get("diarization", {}) or {}
+        self._diarize_enabled = diar_cfg.get("enabled", False) if diarize is None else bool(diarize)
+        self._min_speakers = diar_cfg.get("min_speakers")
+        self._max_speakers = diar_cfg.get("max_speakers")
 
     @property
     def engine_name(self):
@@ -136,6 +141,38 @@ class Transcriber:
         result = self._engine_fn(audio_path, self._model, self._language)
 
         print(f"[transcriber] Done. {len(result['text'])} chars.", file=sys.stderr)
+
+        if self._diarize_enabled:
+            from .diarizer import diarize as _diarize, align_segments
+            print(
+                f"[transcriber] Diarization enabled (min={self._min_speakers}, "
+                f"max={self._max_speakers}) — running pyannote.",
+                file=sys.stderr,
+            )
+            turns = _diarize(
+                audio_path,
+                min_speakers=self._min_speakers,
+                max_speakers=self._max_speakers,
+            )
+            if turns and result.get("segments"):
+                result["segments"] = align_segments(result["segments"], turns)
+                speakers = sorted({s.get("speaker") for s in result["segments"] if s.get("speaker")})
+                result["speakers"] = speakers
+                result["diarized"] = True
+                print(
+                    f"[transcriber] Aligned {len(result['segments'])} segments "
+                    f"across {len(speakers)} speakers.",
+                    file=sys.stderr,
+                )
+            else:
+                if self._diarize_enabled and not turns:
+                    print(
+                        "[transcriber] Diarization returned no turns — "
+                        "leaving transcript unlabeled.",
+                        file=sys.stderr,
+                    )
+                result["diarized"] = False
+
         return result
 
     @staticmethod

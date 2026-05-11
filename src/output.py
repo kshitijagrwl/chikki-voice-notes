@@ -33,7 +33,11 @@ def write_note(processed: dict, transcript: dict, audio_path: str, duration: flo
     os.makedirs(transcripts_dir, exist_ok=True)
     transcript_path = os.path.join(transcripts_dir, f"{base_name}.txt")
     with open(transcript_path, "w") as f:
-        f.write(transcript.get("text", ""))
+        if transcript.get("diarized") and transcript.get("segments"):
+            from .processor import format_diarized_text
+            f.write(format_diarized_text(transcript["segments"]))
+        else:
+            f.write(transcript.get("text", ""))
     # Also save structured transcript data as JSON for reprocessing
     transcript_json_path = os.path.join(transcripts_dir, f"{base_name}.json")
     with open(transcript_json_path, "w") as f:

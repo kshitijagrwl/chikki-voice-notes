@@ -13,7 +13,11 @@ let package = Package(
             name: "ChikkiApp",
             dependencies: ["KeyboardShortcuts", "Yams"],
             path: "Sources",
-            exclude: ["Info.plist"]
+            exclude: ["Info.plist", "SystemAudioCaptureCLI"]
+        ),
+        .executableTarget(
+            name: "chikki-syscap",
+            path: "Sources/SystemAudioCaptureCLI"
         ),
     ]
 )

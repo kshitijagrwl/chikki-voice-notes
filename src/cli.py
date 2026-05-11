@@ -82,8 +82,10 @@ def cli():
 
 
 @cli.command()
-@click.option("--duration", "-d", type=int, default=0, help="Max recording duration in seconds (0=unlimited)")
-def record(duration):
+@click.option("--duration", type=int, default=0, help="Max recording duration in seconds (0=unlimited)")
+@click.option("--diarize/--no-diarize", "-d/-D", default=None,
+              help="Override config: enable/disable speaker diarization on the recording (only relevant if processed later).")
+def record(duration, diarize):
     """Record audio from microphone. Press Ctrl+C to stop."""
     from .recorder import Recorder
 
@@ -121,14 +123,20 @@ def record(duration):
 @click.argument("audio_path", type=click.Path(exists=True))
 @click.option("--engine", "-e", type=click.Choice(["whisper", "indicwhisper", "parakeet"]), default=None,
               help="Transcription engine (default: from config)")
-def transcribe(audio_path, engine):
+@click.option("--diarize/--no-diarize", "-d/-D", default=None,
+              help="Override config: enable/disable speaker diarization (pyannote).")
+def transcribe(audio_path, engine, diarize):
     """Transcribe an audio file."""
     from .transcriber import Transcriber
 
-    t = Transcriber(engine=engine)
+    t = Transcriber(engine=engine, diarize=diarize)
     click.echo(click.style(f"Engine: {t.engine_name}", fg="blue"))
     result = t.transcribe(audio_path)
-    click.echo(result["text"])
+    if result.get("diarized") and result.get("segments"):
+        from .processor import format_diarized_text
+        click.echo(format_diarized_text(result["segments"]))
+    else:
+        click.echo(result["text"])
 
 
 @cli.command()
@@ -162,7 +170,7 @@ def process(audio_path, context, slack, engine, meeting_type):
 
     p = Processor(meeting_type=meeting_type)
     with live_timer(f"Extracting notes ({p.type_name}) via {CONFIG['processing']['model']}"):
-        processed = p.process(transcript["text"], context=context)
+        processed = p.process(transcript, context=context)
 
     with live_timer("Saving note + compressing audio"):
         note_path = write_note(processed, transcript, audio_path, audio_dur)
@@ -187,12 +195,14 @@ def process(audio_path, context, slack, engine, meeting_type):
 @cli.command()
 @click.option("--context", "-c", default="", help="Additional context for the LLM")
 @click.option("--slack/--no-slack", default=False, help="Post summary to Slack")
-@click.option("--duration", "-d", type=int, default=0, help="Max duration in seconds")
+@click.option("--duration", type=int, default=0, help="Max duration in seconds")
 @click.option("--engine", "-e", type=click.Choice(["whisper", "indicwhisper", "parakeet"]), default=None,
               help="Transcription engine (default: from config)")
 @click.option("--type", "-t", "meeting_type", default=None,
               help="Meeting type: default, standup, strategy, one_on_one, brainstorm, interview")
-def quick(context, slack, duration, engine, meeting_type):
+@click.option("--diarize/--no-diarize", "-d/-D", default=None,
+              help="Override config: enable/disable speaker diarization (pyannote).")
+def quick(context, slack, duration, engine, meeting_type, diarize):
     """Record, transcribe, and process in one go. Ctrl+C to stop recording."""
     from .recorder import Recorder
     from .transcriber import Transcriber
@@ -236,7 +246,7 @@ def quick(context, slack, duration, engine, meeting_type):
 
     from .cleaner import clean_transcript
 
-    t = Transcriber(engine=engine)
+    t = Transcriber(engine=engine, diarize=diarize)
     with live_timer(f"Transcribing ({engine_name}, {dur_str} audio)"):
         transcript = t.transcribe(audio_path)
 
@@ -245,7 +255,7 @@ def quick(context, slack, duration, engine, meeting_type):
 
     p = Processor(meeting_type=meeting_type)
     with live_timer(f"Extracting notes ({p.type_name}) via {CONFIG['processing']['model']}"):
-        processed = p.process(transcript["text"], context=context)
+        processed = p.process(transcript, context=context)
 
     with live_timer("Saving note + compressing audio"):
         note_path = write_note(processed, transcript, audio_path, rec_duration)
@@ -296,7 +306,9 @@ def types():
 @click.option("--type", "-t", "meeting_type", required=True,
               help="Meeting type: default, standup, strategy, one_on_one, brainstorm, interview")
 @click.option("--context", "-c", default="", help="Additional context for the LLM")
-def reprocess(transcript_path, meeting_type, context):
+@click.option("--diarize/--no-diarize", "-d/-D", default=None,
+              help="Override config: enable/disable speaker diarization (pyannote). Only applies when reprocessing an audio file.")
+def reprocess(transcript_path, meeting_type, context, diarize):
     """Re-summarize a saved transcript with a different meeting type.
 
     Use with transcript JSON files in transcripts/ folder.
@@ -310,7 +322,7 @@ def reprocess(transcript_path, meeting_type, context):
     if transcript_path.endswith((".wav", ".mp3", ".m4a", ".flac", ".ogg")):
         from .transcriber import Transcriber
         click.echo(f"Audio file detected — transcribing first, then processing as {meeting_type}.")
-        t = Transcriber()
+        t = Transcriber(diarize=diarize)
         with live_timer("Transcribing audio"):
             transcript = t.transcribe(transcript_path)
     elif transcript_path.endswith(".json"):
@@ -327,7 +339,7 @@ def reprocess(transcript_path, meeting_type, context):
 
     p = Processor(meeting_type=meeting_type)
     with live_timer(f"Re-extracting ({p.type_name}) via {CONFIG['processing']['model']}"):
-        processed = p.process(text, context=context)
+        processed = p.process(transcript, context=context)
 
     # Use a dummy audio path for the note
     note_path = write_note(processed, transcript, transcript_path, 0)

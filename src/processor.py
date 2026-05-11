@@ -35,6 +35,30 @@ def _load_pipeline_prompts() -> dict:
     return pipeline
 
 
+def format_diarized_text(segments: list) -> str:
+    """Build a `[Speaker A]: line` transcript from diarized segments.
+
+    Consecutive segments by the same speaker are merged into one line for
+    readability. Segments without a speaker label fall back to `[Speaker ?]`.
+    """
+    lines: list[str] = []
+    current_speaker: str | None = None
+    buf: list[str] = []
+    for seg in segments:
+        text = (seg.get("text") or "").strip()
+        if not text:
+            continue
+        spk = seg.get("speaker") or "?"
+        if spk != current_speaker and buf:
+            lines.append(f"[Speaker {current_speaker}]: " + " ".join(buf))
+            buf = []
+        current_speaker = spk
+        buf.append(text)
+    if buf:
+        lines.append(f"[Speaker {current_speaker}]: " + " ".join(buf))
+    return "\n".join(lines)
+
+
 def available_types() -> dict:
     """Return dict of type_key -> {name, description}."""
     prompts = load_prompts()
@@ -116,8 +140,20 @@ class Processor:
     def type_name(self):
         return self._type_name
 
-    def process(self, transcript_text: str, context: str = "") -> dict:
-        """Process transcript text into structured notes using the configured LLM provider."""
+    def process(self, transcript_text, context: str = "") -> dict:
+        """Process transcript text into structured notes using the configured LLM provider.
+
+        `transcript_text` may be a plain string OR a transcript dict (with
+        `segments`/`speakers`). When a dict with diarized segments is passed,
+        the prompt fed to the LLM is built as `[Speaker A]: ...` lines.
+        """
+        if isinstance(transcript_text, dict):
+            transcript_dict = transcript_text
+            if transcript_dict.get("diarized") and transcript_dict.get("segments"):
+                transcript_text = format_diarized_text(transcript_dict["segments"])
+            else:
+                transcript_text = transcript_dict.get("text", "")
+
         print(
             f"[processor] Provider: {self._provider} | Type: {self._type_name} | "
             f"Model: {self._model_name} | {len(transcript_text)} chars",

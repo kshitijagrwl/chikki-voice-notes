@@ -59,6 +59,17 @@ final class ConfigStore: ObservableObject {
         objectWillChange.send()
     }
 
+    func bool(_ section: String, _ key: String, default def: Bool = false) -> Bool {
+        ((rawConfig[section] as? [String: Any])?[key] as? Bool) ?? def
+    }
+
+    func setBool(_ section: String, _ key: String, _ value: Bool) {
+        var sec = self.section(section)
+        sec[key] = value
+        setSection(section, sec)
+        objectWillChange.send()
+    }
+
     // MARK: - Typed accessors
 
     var notesDir: String {
@@ -79,6 +90,64 @@ final class ConfigStore: ObservableObject {
     var llmProvider: String {
         get { string("processing", "provider", default: "gemini") }
         set { setString("processing", "provider", newValue); save() }
+    }
+
+    var systemAudio: Bool {
+        get { bool("recording", "system_audio", default: false) }
+        set { setBool("recording", "system_audio", newValue); save() }
+    }
+
+    // MARK: - Diarization
+
+    var diarizationEnabled: Bool {
+        get { bool("diarization", "enabled", default: false) }
+        set { setBool("diarization", "enabled", newValue); save() }
+    }
+
+    /// nil means "auto" (no constraint).
+    var diarizationMinSpeakers: Int? {
+        get { (rawConfig["diarization"] as? [String: Any])?["min_speakers"] as? Int }
+        set {
+            var sec = self.section("diarization")
+            if let v = newValue { sec["min_speakers"] = v } else { sec["min_speakers"] = NSNull() }
+            rawConfig["diarization"] = sec
+            objectWillChange.send()
+            save()
+        }
+    }
+
+    var diarizationMaxSpeakers: Int? {
+        get { (rawConfig["diarization"] as? [String: Any])?["max_speakers"] as? Int }
+        set {
+            var sec = self.section("diarization")
+            if let v = newValue { sec["max_speakers"] = v } else { sec["max_speakers"] = NSNull() }
+            rawConfig["diarization"] = sec
+            objectWillChange.send()
+            save()
+        }
+    }
+
+    /// Does `.env` at the project root contain an HF_TOKEN line?
+    func hasHFToken() -> Bool {
+        let envPath = "\(projectDir)/.env"
+        guard let contents = try? String(contentsOfFile: envPath, encoding: .utf8) else {
+            return false
+        }
+        for raw in contents.split(separator: "\n") {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.hasPrefix("#") || line.isEmpty { continue }
+            let key = line.split(separator: "=", maxSplits: 1).first.map(String.init)?
+                .trimmingCharacters(in: .whitespaces) ?? ""
+            if key == "HF_TOKEN" || key == "HUGGINGFACE_TOKEN" {
+                // Ensure a non-empty value.
+                let parts = line.split(separator: "=", maxSplits: 1)
+                if parts.count == 2 {
+                    let val = parts[1].trimmingCharacters(in: CharacterSet(charactersIn: " \t'\""))
+                    return !val.isEmpty
+                }
+            }
+        }
+        return false
     }
 }
 

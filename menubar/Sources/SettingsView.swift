@@ -52,9 +52,9 @@ struct SettingsView: View {
             Group {
                 switch selection ?? .general {
                 case .general:       GeneralPane()
-                case .recording:     StubPane(title: "Recording", note: "Coming with system audio support (#2).")
+                case .recording:     RecordingPane()
                 case .transcription: StubPane(title: "Transcription", note: "Engine + language settings coming in a future PR.")
-                case .diarization:   StubPane(title: "Diarization", note: "Speaker separation + identification (#1).")
+                case .diarization:   DiarizationPane()
                 case .processing:    StubPane(title: "Processing", note: "LLM provider/model & prompt tuning.")
                 case .calendar:      StubPane(title: "Calendar", note: "Auto-record from calendar events (#10).")
                 case .shortcuts:     ShortcutsPane()
@@ -170,6 +170,139 @@ private struct GeneralPane: View {
         if panel.runModal() == .OK, let url = panel.url {
             binding.wrappedValue = url.path
             commit(url.path)
+        }
+    }
+}
+
+// MARK: - Recording pane
+
+private struct RecordingPane: View {
+    @ObservedObject private var store = ConfigStore.shared
+    @State private var systemAudio: Bool = false
+
+    var body: some View {
+        Form {
+            Section("System audio") {
+                Toggle("Capture system audio", isOn: $systemAudio)
+                    .onChange(of: systemAudio) { _, newValue in
+                        store.systemAudio = newValue
+                    }
+                Text("Mixes the system audio stream (e.g. Zoom, Meet, Slack huddle) with your microphone so both sides are transcribed. Uses Apple ScreenCaptureKit — requires Screen Recording permission.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                LabeledContent("Screen Recording permission") {
+                    HStack {
+                        Text("Manage in Permissions pane")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Open System Settings…") {
+                            if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture") {
+                                NSWorkspace.shared.open(u)
+                            }
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Text("When off, Chikki records the microphone only (default). When on, a stereo archive is saved (L=mic, R=system) and a mono mix is used for transcription.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            store.reload()
+            systemAudio = store.systemAudio
+        }
+    }
+}
+
+// MARK: - Diarization pane
+
+private struct DiarizationPane: View {
+    @ObservedObject private var store = ConfigStore.shared
+
+    @State private var enabled: Bool = false
+    @State private var hasMin: Bool = false
+    @State private var hasMax: Bool = false
+    @State private var minSpeakers: Int = 2
+    @State private var maxSpeakers: Int = 4
+    @State private var hasToken: Bool = false
+
+    var body: some View {
+        Form {
+            Section("Speaker diarization") {
+                Toggle("Label speakers in transcripts", isOn: $enabled)
+                    .onChange(of: enabled) { _, newValue in
+                        store.diarizationEnabled = newValue
+                    }
+                Text("Uses pyannote/speaker-diarization-3.1 to split transcripts into Speaker A, B, C… by voice. Runs on the Apple Silicon MPS backend.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Speaker count") {
+                Toggle("Set minimum speakers", isOn: $hasMin)
+                    .onChange(of: hasMin) { _, on in
+                        store.diarizationMinSpeakers = on ? minSpeakers : nil
+                    }
+                if hasMin {
+                    Stepper("Minimum: \(minSpeakers)", value: $minSpeakers, in: 1...20)
+                        .onChange(of: minSpeakers) { _, newValue in
+                            store.diarizationMinSpeakers = newValue
+                        }
+                }
+
+                Toggle("Set maximum speakers", isOn: $hasMax)
+                    .onChange(of: hasMax) { _, on in
+                        store.diarizationMaxSpeakers = on ? maxSpeakers : nil
+                    }
+                if hasMax {
+                    Stepper("Maximum: \(maxSpeakers)", value: $maxSpeakers, in: 1...20)
+                        .onChange(of: maxSpeakers) { _, newValue in
+                            store.diarizationMaxSpeakers = newValue
+                        }
+                }
+
+                Text("Leave both unset for auto-detection. Setting bounds can improve quality when you know the meeting size.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("HuggingFace token") {
+                LabeledContent("HF_TOKEN") {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(hasToken ? Color.green : Color.orange)
+                            .frame(width: 8, height: 8)
+                        Text(hasToken ? "Detected in .env" : "Missing")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Refresh") { hasToken = store.hasHFToken() }
+                    }
+                }
+                Text("pyannote requires a free HuggingFace token AND acceptance of the model EULA at huggingface.co/pyannote/speaker-diarization-3.1. Add the line `HF_TOKEN=hf_…` to the project's .env file.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section {
+                Text("Identification (mapping Speaker A to a real name) is a separate setting — coming in a follow-up PR.")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            store.reload()
+            enabled = store.diarizationEnabled
+            if let v = store.diarizationMinSpeakers { hasMin = true; minSpeakers = v } else { hasMin = false }
+            if let v = store.diarizationMaxSpeakers { hasMax = true; maxSpeakers = v } else { hasMax = false }
+            hasToken = store.hasHFToken()
         }
     }
 }

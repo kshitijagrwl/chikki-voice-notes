@@ -32,11 +32,18 @@ def clean_transcript(transcript: dict) -> dict:
     if orig_len > 0 and (orig_len - new_len) > 50:
         print(f"[cleaner] Removed {orig_len - new_len} chars of noise ({100 * (orig_len - new_len) / orig_len:.0f}%)", file=sys.stderr)
 
-    return {
+    out = {
         "text": cleaned_text,
         "segments": cleaned_segments,
         "language": transcript.get("language", "en"),
     }
+    # Preserve diarization metadata if present (segment `speaker` keys
+    # survive automatically since segments are filtered, not rebuilt).
+    if "diarized" in transcript:
+        out["diarized"] = transcript["diarized"]
+    if "speakers" in transcript:
+        out["speakers"] = transcript["speakers"]
+    return out
 
 
 def _clean_text(text: str) -> str:
