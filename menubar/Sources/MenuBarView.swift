@@ -1,9 +1,11 @@
 import SwiftUI
+import AppKit
 import KeyboardShortcuts
 
 struct MenuBarView: View {
     @EnvironmentObject var recorder: RecordingManager
     @EnvironmentObject var calendar: CalendarWatcher
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -44,7 +46,7 @@ struct MenuBarView: View {
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
 
-                Button("Stop Recording") {
+                MenuRowButton("Stop Recording") {
                     Task { await recorder.stopRecording() }
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -86,7 +88,7 @@ struct MenuBarView: View {
                 .frame(minWidth: 260)
 
             } else {
-                Button("Start Recording") {
+                MenuRowButton("Start Recording") {
                     Task { await recorder.startRecording() }
                 }
                 .keyboardShortcut("r", modifiers: [.command, .shift])
@@ -114,12 +116,17 @@ struct MenuBarView: View {
 
             // MARK: Footer actions
 
-            SettingsLink {
-                Text("Open Settings…")
+            MenuRowButton("Open Settings…") {
+                NSApp.activate(ignoringOtherApps: true)
+                if #available(macOS 14, *) {
+                    openSettings()
+                } else {
+                    NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                }
             }
             .keyboardShortcut(",", modifiers: [.command])
 
-            Button("Quit Chikki") {
+            MenuRowButton("Quit Chikki") {
                 NSApplication.shared.terminate(nil)
             }
             .keyboardShortcut("q")
@@ -141,6 +148,34 @@ private func countdownLabel(for date: Date) -> String {
     let h = m / 60
     let mm = m % 60
     return String(format: "Starts in %dh %02dm", h, mm)
+}
+
+/// Flat menubar-style row button: no chrome, full-width hover highlight.
+struct MenuRowButton: View {
+    let title: String
+    let action: () -> Void
+    @State private var hovering = false
+
+    init(_ title: String, action: @escaping () -> Void) {
+        self.title = title
+        self.action = action
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .contentShape(Rectangle())
+                .background(
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(hovering ? Color.accentColor.opacity(0.18) : Color.clear)
+                )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+    }
 }
 
 enum StepState {
