@@ -6,6 +6,8 @@ struct MenuBarView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            // MARK: Primary action
+
             if recorder.isRecording {
                 HStack {
                     Circle()
@@ -23,7 +25,6 @@ struct MenuBarView: View {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
 
             } else if recorder.isProcessing {
-                // Multi-step progress
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Text("Processing")
@@ -40,7 +41,7 @@ struct MenuBarView: View {
                         state: recorder.stepState(for: "transcribing")
                     )
                     ProcessingStepView(
-                        label: "Extracting notes (Gemini)",
+                        label: "Extracting notes",
                         state: recorder.stepState(for: "processing")
                     )
                     ProcessingStepView(
@@ -66,9 +67,10 @@ struct MenuBarView: View {
                 .keyboardShortcut("r", modifiers: [.command, .shift])
             }
 
-            Divider()
+            // MARK: Last recording status
 
             if let lastNote = recorder.lastNote, !lastNote.isEmpty {
+                Divider()
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Last note:")
                         .font(.caption2)
@@ -79,23 +81,16 @@ struct MenuBarView: View {
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
-
-                Divider()
-            }
-
-            Button("Open Notes Folder") {
-                recorder.openNotesFolder()
-            }
-
-            Button("Open Recordings Folder") {
-                recorder.openRecordingsFolder()
             }
 
             Divider()
 
+            // MARK: Footer actions
+
             SettingsLink {
-                Text("Settings...")
+                Text("Open Settings…")
             }
+            .keyboardShortcut(",", modifiers: [.command])
 
             Button("Quit Chikki") {
                 NSApplication.shared.terminate(nil)
@@ -105,7 +100,6 @@ struct MenuBarView: View {
         .padding(.vertical, 4)
     }
 }
-
 
 enum StepState {
     case pending
