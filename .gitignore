@@ -5,6 +5,8 @@
 recordings/
 transcripts/
 notes/
+# Speaker embeddings (binary, device-specific) — commit registry.json but not .npy
+speakers/*.npy
 
 # Local config (users copy from .example)
 config.yaml

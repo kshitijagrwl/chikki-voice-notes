@@ -39,6 +39,13 @@ diarization:
   # Optional hard constraints on the diarizer. null = auto-detect.
   min_speakers: null
   max_speakers: null
+  # Speaker identification: match diarization clusters against enrolled
+  # speakers in speakers/registry.json. When true and the registry is
+  # non-empty, anonymous labels (A, B, C…) are replaced with real names.
+  # Enroll speakers with: python -m src.cli enroll <name> <audio.wav>
+  identify: true
+  # Cosine similarity threshold for a match (0.0–1.0). Lower = more lenient.
+  match_threshold: 0.7
 
 processing:
   # LLM provider: gemini | openai | anthropic

@@ -417,6 +417,57 @@ def process_latest(engine):
 
 
 @cli.command()
+@click.argument("name")
+@click.argument("audio_path", type=click.Path(exists=True))
+def enroll(name, audio_path):
+    """Enroll a speaker from a WAV file (30s sample recommended).
+
+    Runs pyannote/embedding to compute a mean voice embedding and saves it
+    to speakers/registry.json for use during diarization identification.
+
+    Example:
+        python -m src.cli enroll Kshitij speakers/kshitij_sample.wav
+    """
+    from .speaker_db import enroll as _enroll
+
+    try:
+        _enroll(name, audio_path)
+        click.echo(click.style(f"Enrolled: {name}", fg="green"))
+    except RuntimeError as e:
+        click.echo(click.style(f"Enrollment failed: {e}", fg="red"), err=True)
+        raise SystemExit(1)
+
+
+@cli.command()
+def speakers():
+    """List all enrolled speakers."""
+    from .speaker_db import list_speakers
+
+    entries = list_speakers()
+    if not entries:
+        click.echo("No speakers enrolled. Use `enroll <name> <audio.wav>` to add one.")
+        return
+
+    click.echo(click.style(f"Enrolled speakers ({len(entries)}):", bold=True))
+    for entry in entries:
+        created = entry.get("created_at", "unknown date")
+        click.echo(f"  {click.style(entry['name'], fg='cyan')}  —  enrolled {created}")
+
+
+@cli.command()
+@click.argument("name")
+def unenroll(name):
+    """Remove an enrolled speaker by name."""
+    from .speaker_db import delete
+
+    if delete(name):
+        click.echo(click.style(f"Removed: {name}", fg="green"))
+    else:
+        click.echo(click.style(f"Speaker '{name}' not found in registry.", fg="yellow"))
+        raise SystemExit(1)
+
+
+@cli.command()
 def list_notes():
     """List all saved notes."""
     notes_dir = CONFIG["output"]["notes_dir"]

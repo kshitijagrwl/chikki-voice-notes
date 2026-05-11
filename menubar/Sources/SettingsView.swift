@@ -232,6 +232,8 @@ private struct DiarizationPane: View {
     @State private var minSpeakers: Int = 2
     @State private var maxSpeakers: Int = 4
     @State private var hasToken: Bool = false
+    @State private var identify: Bool = true
+    @State private var matchThreshold: Double = 0.7
 
     var body: some View {
         Form {
@@ -290,10 +292,25 @@ private struct DiarizationPane: View {
                     .foregroundStyle(.secondary)
             }
 
-            Section {
-                Text("Identification (mapping Speaker A to a real name) is a separate setting — coming in a follow-up PR.")
+            Section("Speaker identification") {
+                Toggle("Match speakers to enrolled names", isOn: $identify)
+                    .onChange(of: identify) { _, newValue in
+                        store.diarizationIdentify = newValue
+                    }
+                LabeledContent("Match threshold: \(String(format: "%.2f", matchThreshold))") {
+                    Slider(value: $matchThreshold, in: 0.4...0.95, step: 0.05)
+                        .frame(width: 180)
+                        .onChange(of: matchThreshold) { _, newValue in
+                            store.diarizationMatchThreshold = newValue
+                        }
+                }
+                Text("When enabled and speakers are enrolled below, anonymous labels (A, B, C…) are replaced with real names if cosine similarity exceeds the threshold.")
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Enrolled speakers") {
+                SpeakersSubview()
             }
         }
         .formStyle(.grouped)
@@ -303,6 +320,318 @@ private struct DiarizationPane: View {
             if let v = store.diarizationMinSpeakers { hasMin = true; minSpeakers = v } else { hasMin = false }
             if let v = store.diarizationMaxSpeakers { hasMax = true; maxSpeakers = v } else { hasMax = false }
             hasToken = store.hasHFToken()
+            identify = store.diarizationIdentify
+            matchThreshold = store.diarizationMatchThreshold
+        }
+    }
+}
+
+// MARK: - Shared helpers for speaker views
+
+private func findCondaBase() -> String {
+    let home = FileManager.default.homeDirectoryForCurrentUser.path
+    let candidates = [
+        "\(home)/miniconda3",
+        "\(home)/anaconda3",
+        "\(home)/miniforge3",
+        "/opt/homebrew/Caskroom/miniconda/base",
+    ]
+    for path in candidates {
+        if FileManager.default.fileExists(atPath: "\(path)/envs") {
+            return path
+        }
+    }
+    return "\(home)/miniconda3"
+}
+
+// MARK: - Speakers subview (used from DiarizationPane)
+
+private struct SpeakersSubview: View {
+    @ObservedObject private var store = ConfigStore.shared
+
+    @State private var speakers: [SpeakerEntry] = []
+    @State private var showEnrollSheet: Bool = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Enrolled Speakers")
+                    .font(.headline)
+                Spacer()
+                Button("Add Speaker…") { showEnrollSheet = true }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+            }
+            .padding(.bottom, 8)
+
+            if speakers.isEmpty {
+                Text("No speakers enrolled. Use \"Add Speaker\" to record a 30-second voice sample.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 12)
+            } else {
+                List {
+                    ForEach(speakers) { entry in
+                        HStack {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(entry.name)
+                                    .fontWeight(.medium)
+                                Text("Enrolled \(formatDate(entry.createdAt))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button("Delete") {
+                                unenroll(entry.name)
+                            }
+                            .foregroundStyle(.red)
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.bordered)
+                .frame(minHeight: 80, maxHeight: 220)
+            }
+        }
+        .onAppear { reloadSpeakers() }
+        .sheet(isPresented: $showEnrollSheet) {
+            EnrollSheet(onEnrolled: reloadSpeakers)
+        }
+    }
+
+    private func reloadSpeakers() {
+        speakers = store.loadSpeakers()
+    }
+
+    private func unenroll(_ name: String) {
+        let rm = RecordingManager.shared
+        let condaBase = findCondaBase()
+        let python = "\(condaBase)/envs/chikki/bin/python"
+        let cmd = "cd \"\(rm.projectDir)\" && \"\(python)\" -m src.cli unenroll \"\(name)\""
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = ["-c", cmd]
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+        try? proc.run()
+        proc.waitUntilExit()
+        reloadSpeakers()
+    }
+
+    private func formatDate(_ iso: String) -> String {
+        let fmt = ISO8601DateFormatter()
+        fmt.formatOptions = [.withInternetDateTime, .withDashSeparatorInDate, .withColonSeparatorInTime]
+        if let d = fmt.date(from: iso) {
+            let out = DateFormatter()
+            out.dateStyle = .medium
+            out.timeStyle = .none
+            return out.string(from: d)
+        }
+        return iso.prefix(10).description
+    }
+
+}
+
+// MARK: - Enroll sheet
+
+private struct EnrollSheet: View {
+    var onEnrolled: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var speakerName: String = ""
+    @State private var isRecording: Bool = false
+    @State private var elapsedSeconds: Int = 0
+    @State private var recordedFilePath: String? = nil
+    @State private var statusMessage: String = "Enter a name and record a 30-second voice sample."
+    @State private var isProcessing: Bool = false
+    @State private var recordProcess: Process? = nil
+    @State private var timer: Timer? = nil
+
+    private let targetDuration: Int = 30
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Add Speaker")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            TextField("Speaker name (e.g. Kshitij)", text: $speakerName)
+                .textFieldStyle(.roundedBorder)
+                .disabled(isRecording || isProcessing)
+
+            HStack(spacing: 12) {
+                if isRecording {
+                    Button("Stop Recording") {
+                        stopRecording()
+                    }
+                    .buttonStyle(.bordered)
+                    .foregroundStyle(.red)
+
+                    Text(String(format: "%02d / 30s", elapsedSeconds))
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                } else {
+                    Button("Start Recording") {
+                        startRecording()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(speakerName.trimmingCharacters(in: .whitespaces).isEmpty || isProcessing)
+                }
+            }
+
+            Text(statusMessage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Divider()
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .disabled(isRecording || isProcessing)
+                Button("Enroll") {
+                    runEnrollment()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(recordedFilePath == nil || isRecording || isProcessing || speakerName.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+        .onDisappear {
+            stopRecording()
+        }
+    }
+
+    private func startRecording() {
+        guard !speakerName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        isRecording = true
+        elapsedSeconds = 0
+        statusMessage = "Recording… speak naturally for 30 seconds."
+
+        // Record to a temp file in the speakers/ directory.
+        let rm = RecordingManager.shared
+        let speakersDir = "\(rm.projectDir)/speakers"
+        try? FileManager.default.createDirectory(atPath: speakersDir, withIntermediateDirectories: true)
+        let safe = speakerName.lowercased().replacingOccurrences(of: " ", with: "_")
+        let tmpPath = "\(speakersDir)/enroll_\(safe)_tmp.wav"
+        recordedFilePath = tmpPath
+
+        let condaBase = findCondaBase()
+        let python = "\(condaBase)/envs/chikki/bin/python"
+        let cmd = "cd \"\(rm.projectDir)\" && \"\(python)\" -m src.cli record --duration \(targetDuration)"
+
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        proc.arguments = ["-c", cmd]
+        proc.currentDirectoryURL = URL(fileURLWithPath: rm.projectDir)
+        proc.standardOutput = Pipe()
+        proc.standardError = Pipe()
+
+        // Read stdout for the saved path.
+        let outPipe = Pipe()
+        proc.standardOutput = outPipe
+
+        try? proc.run()
+        recordProcess = proc
+
+        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            Task { @MainActor in
+                elapsedSeconds += 1
+                if elapsedSeconds >= targetDuration {
+                    stopRecording()
+                }
+            }
+        }
+
+        // Capture main-actor values before entering detached task.
+        let capturedName = speakerName
+        // Read saved path from stdout when process ends.
+        Task.detached {
+            proc.waitUntilExit()
+            let data = outPipe.fileHandleForReading.readDataToEndOfFile()
+            let resolvedPath: String? = {
+                guard let text = String(data: data, encoding: .utf8) else { return nil }
+                for line in text.components(separatedBy: .newlines) {
+                    let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if trimmed.hasPrefix("Saved: ") {
+                        return String(trimmed.dropFirst("Saved: ".count))
+                    } else if trimmed.hasPrefix("/") && trimmed.hasSuffix(".wav") {
+                        return trimmed
+                    }
+                }
+                return nil
+            }()
+            await MainActor.run {
+                if let p = resolvedPath {
+                    recordedFilePath = p
+                }
+                isRecording = false
+                statusMessage = recordedFilePath != nil
+                    ? "Recording saved. Press Enroll to register \(capturedName)."
+                    : "Recording finished — check recordings/ for the file, then enroll manually via CLI."
+            }
+        }
+    }
+
+    private func stopRecording() {
+        timer?.invalidate()
+        timer = nil
+        if let proc = recordProcess, proc.isRunning {
+            proc.interrupt()
+        }
+        recordProcess = nil
+        if isRecording {
+            isRecording = false
+            statusMessage = recordedFilePath != nil
+                ? "Recording stopped. Press Enroll to register \(speakerName)."
+                : "Recording stopped."
+        }
+    }
+
+    private func runEnrollment() {
+        guard let filePath = recordedFilePath,
+              !speakerName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+
+        isProcessing = true
+        statusMessage = "Running enrollment — this may take a moment…"
+
+        // Capture main-actor values before entering detached task.
+        let rm = RecordingManager.shared
+        let condaBase = findCondaBase()
+        let python = "\(condaBase)/envs/chikki/bin/python"
+        let nameQ = speakerName.replacingOccurrences(of: "\"", with: "\\\"")
+        let fileQ = filePath.replacingOccurrences(of: "\"", with: "\\\"")
+        let projectDir = rm.projectDir
+
+        Task.detached {
+            let cmd = "cd \"\(projectDir)\" && \"\(python)\" -m src.cli enroll \"\(nameQ)\" \"\(fileQ)\""
+
+            let proc = Process()
+            proc.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            proc.arguments = ["-c", cmd]
+            proc.currentDirectoryURL = URL(fileURLWithPath: projectDir)
+            proc.standardOutput = Pipe()
+            proc.standardError = Pipe()
+
+            try? proc.run()
+            proc.waitUntilExit()
+
+            let succeeded = proc.terminationStatus == 0
+
+            await MainActor.run {
+                isProcessing = false
+                if succeeded {
+                    onEnrolled()
+                    dismiss()
+                } else {
+                    statusMessage = "Enrollment failed. Check that HF_TOKEN is set in .env and pyannote is installed."
+                }
+            }
         }
     }
 }

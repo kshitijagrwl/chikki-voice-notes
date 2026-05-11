@@ -127,6 +127,27 @@ final class ConfigStore: ObservableObject {
         }
     }
 
+    var diarizationIdentify: Bool {
+        get { bool("diarization", "identify", default: true) }
+        set { setBool("diarization", "identify", newValue); save() }
+    }
+
+    var diarizationMatchThreshold: Double {
+        get {
+            let raw = (rawConfig["diarization"] as? [String: Any])?["match_threshold"]
+            if let d = raw as? Double { return d }
+            if let i = raw as? Int { return Double(i) }
+            return 0.7
+        }
+        set {
+            var sec = self.section("diarization")
+            sec["match_threshold"] = newValue
+            rawConfig["diarization"] = sec
+            objectWillChange.send()
+            save()
+        }
+    }
+
     /// Does `.env` at the project root contain an HF_TOKEN line?
     func hasHFToken() -> Bool {
         let envPath = "\(projectDir)/.env"
@@ -148,6 +169,34 @@ final class ConfigStore: ObservableObject {
             }
         }
         return false
+    }
+}
+
+// MARK: - Speaker registry
+
+struct SpeakerEntry: Identifiable, Hashable {
+    var id: String { name }
+    let name: String
+    let embeddingPath: String
+    let createdAt: String
+}
+
+extension ConfigStore {
+    /// Reads `speakers/registry.json` from the project directory.
+    /// Returns an empty array if the file is missing or malformed.
+    func loadSpeakers() -> [SpeakerEntry] {
+        let path = "\(projectDir)/speakers/registry.json"
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let speakers = obj["speakers"] as? [[String: Any]] else {
+            return []
+        }
+        return speakers.compactMap { dict in
+            guard let name = dict["name"] as? String,
+                  let embPath = dict["embedding_path"] as? String else { return nil }
+            let created = dict["created_at"] as? String ?? ""
+            return SpeakerEntry(name: name, embeddingPath: embPath, createdAt: created)
+        }
     }
 }
 
