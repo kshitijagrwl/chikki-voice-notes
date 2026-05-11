@@ -3,27 +3,26 @@ sounddevice>=0.5.0
 soundfile>=0.13.0
 numpy>=1.26.0
 
-# Transcription - Whisper (default)
+# Transcription — Whisper (default)
 mlx-whisper>=0.4.0
 
-# Transcription - Parakeet MLX (optional)
-# parakeet-mlx>=0.2.0
+# Diarization (#1) — requires HF_TOKEN + pyannote/speaker-diarization-3.1 EULA
+torch>=2.2.0
+pyannote.audio>=3.1.0
 
-# Transcription - IndicWhisper fallback (optional, non-MLX)
-# transformers>=4.40.0
-# torch>=2.2.0
-# scipy>=1.12.0
-
-# LLM providers — all three installed; configure which to use in config.yaml
+# LLM providers — all three installed; choose via config.yaml
 google-genai>=1.0.0
 openai>=1.0.0
 anthropic>=0.40.0
 
-# macOS menu bar
-rumps>=0.4.0
-
-# Config
+# Config + CLI
 pyyaml>=6.0
-
-# CLI
 click>=8.1.0
+
+# Optional engines (uncomment if you want them)
+# parakeet-mlx>=0.2.0
+# transformers>=4.40.0      # for ai4bharat IndicWhisper
+# scipy>=1.12.0             # for IndicWhisper
+
+# Legacy Python menubar (the Swift app supersedes this; keep for `python -m src.cli menubar`)
+# rumps>=0.4.0
