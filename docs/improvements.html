@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Chikki — Improvement Plans</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161922;
+    --panel-2: #1d2230;
+    --border: #262b3a;
+    --text: #e6e8ee;
+    --muted: #8a93a6;
+    --accent: #7c9cff;
+    --accent-2: #56d9b3;
+    --crit: #ff6b6b;
+    --imp: #f4b942;
+    --nice: #56d9b3;
+    --low: #56d9b3;
+    --med: #f4b942;
+    --high: #ff8a5b;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--text); margin: 0;
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; }
+  header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 8px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .toolbar { display: flex; align-items: center; gap: 8px; margin: 18px 0 14px; flex-wrap: wrap; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip { background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; user-select: none; }
+  .chip.active { color: var(--text); border-color: var(--accent); background: rgba(124,156,255,.08); }
+  .spacer { flex: 1; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 14px 14px 12px; cursor: pointer; transition: border-color .12s, background .12s;
+    display: flex; flex-direction: column; gap: 8px; position: relative; }
+  .card:hover { border-color: #3a4259; }
+  .card.selected { border-color: var(--accent); background: var(--panel-2);
+    box-shadow: 0 0 0 1px var(--accent) inset; }
+  .card .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .card .head { display: flex; gap: 8px; align-items: flex-start; }
+  .check { width: 18px; height: 18px; border-radius: 5px; border: 1.5px solid var(--border);
+    display: inline-flex; align-items: center; justify-content: center; flex: 0 0 18px;
+    margin-top: 2px; transition: all .12s; background: var(--bg); }
+  .card.selected .check { background: var(--accent); border-color: var(--accent); color: #0b0d13; }
+  .check svg { width: 12px; height: 12px; display: none; }
+  .card.selected .check svg { display: block; }
+  .order-badge { position: absolute; top: 10px; right: 10px; background: var(--accent);
+    color: #0b0d13; font-weight: 700; font-size: 11px; width: 20px; height: 20px;
+    border-radius: 50%; display: none; align-items: center; justify-content: center; }
+  .card.selected .order-badge { display: flex; }
+  .num { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+  .title { font-weight: 600; font-size: 15px; letter-spacing: -0.005em; }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--border);
+    color: var(--muted); background: rgba(255,255,255,.02); }
+  .tag.critical { color: var(--crit); border-color: rgba(255,107,107,.4); background: rgba(255,107,107,.08); }
+  .tag.important { color: var(--imp); border-color: rgba(244,185,66,.4); background: rgba(244,185,66,.08); }
+  .tag.nice { color: var(--nice); border-color: rgba(86,217,179,.4); background: rgba(86,217,179,.08); }
+  .tag.effort-low { color: var(--low); }
+  .tag.effort-medium { color: var(--med); }
+  .tag.effort-high { color: var(--high); }
+  .problem { color: var(--muted); font-size: 13px; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px; margin-top: 22px; }
+  .panel h2 { font-size: 15px; margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
+  textarea { width: 100%; min-height: 110px; resize: vertical; background: var(--bg);
+    color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px;
+    font: inherit; outline: none; }
+  textarea:focus { border-color: var(--accent); }
+  .actions { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  button { background: var(--accent); color: #0b0d13; border: 0; padding: 9px 14px; border-radius: 8px;
+    font-weight: 600; cursor: pointer; font-size: 13px; }
+  button.secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .output { margin-top: 14px; background: #0b0d13; border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; white-space: pre-wrap; font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 12.5px; color: #cfd4e0; max-height: 360px; overflow: auto; display: none; }
+  .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--accent-2); color: #0b0d13; padding: 8px 14px; border-radius: 999px;
+    font-weight: 600; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none;
+    z-index: 100; }
+  .toast.show { opacity: 1; }
+  .empty { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
+  details { color: var(--muted); font-size: 13px; }
+  details summary { cursor: pointer; color: var(--text); font-size: 13px; }
+  details ul { margin: 6px 0 0 18px; padding: 0; }
+  details li { margin: 2px 0; }
+  .selbar { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-bottom: 10px; display: flex; gap: 10px; align-items: center;
+    flex-wrap: wrap; font-size: 13px; }
+  .selbar .pill { background: var(--bg); border: 1px solid var(--border); border-radius: 999px;
+    padding: 3px 8px; font-size: 12px; color: var(--text); }
+  .saved { margin-top: 14px; }
+  .saved-item { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+    padding: 10px 12px; margin-top: 6px; display: flex; gap: 10px; align-items: center; }
+  .saved-item .meta { flex: 1; min-width: 0; }
+  .saved-item .name { font-weight: 600; font-size: 13px; }
+  .saved-item .when { color: var(--muted); font-size: 12px; }
+  .saved-item button { padding: 5px 10px; font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Chikki — Improvement Plans</h1>
+      <div class="sub">Pick one or more plans. Selection order is preserved. Save bundles locally or copy them back into chat.</div>
+    </div>
+    <div class="sub" id="count"></div>
+  </header>
+
+  <div class="toolbar">
+    <div class="filters" id="filters">
+      <div class="chip active" data-filter="all">All</div>
+      <div class="chip" data-filter="critical">Critical</div>
+      <div class="chip" data-filter="important">Important</div>
+      <div class="chip" data-filter="nice">Nice-to-have</div>
+      <div class="chip" data-filter="low">Effort: Low</div>
+      <div class="chip" data-filter="medium">Effort: Medium</div>
+      <div class="chip" data-filter="high">Effort: High</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="ghost" id="selectAll">Select all visible</button>
+    <button class="ghost" id="clearSel">Clear</button>
+  </div>
+
+  <div class="selbar" id="selbar" style="display:none;">
+    <strong id="selCount">0 selected</strong>
+    <span id="selPills"></span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <div class="panel">
+    <h2>Add context & generate</h2>
+    <textarea id="context" placeholder="Constraints, preferences, sequencing notes. E.g. 'tackle #3 first as a foundation, then #1' or 'minimum viable PR per plan, no big rewrites'."></textarea>
+    <div class="actions">
+      <button id="generate" disabled>Generate prompt</button>
+      <button id="copy" class="secondary" disabled>Copy</button>
+      <button id="save" class="secondary" disabled>Save bundle</button>
+      <button id="download" class="secondary" disabled>Download .md</button>
+      <button id="reset" class="ghost">Reset</button>
+      <span class="sub" id="hint">Select one or more cards above.</span>
+    </div>
+    <div class="output" id="output"></div>
+  </div>
+
+  <div class="panel saved" id="savedPanel" style="display:none;">
+    <h2>
+      <span>Saved bundles</span>
+      <button class="ghost" id="clearSaved" style="font-size:12px;padding:5px 10px;">Clear all</button>
+    </h2>
+    <div id="savedList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast">Copied</div>
+
+<script>
+const plans = [
+  { n:1, title:"Speaker Diarization", priority:"critical", effort:"medium",
+    problem:"Multi-person meetings produce a single text stream. Action items can't be attributed to speakers.",
+    options:["pyannote-audio (best open-source, HF token, GPU-friendly)","NeMo MSDD (NVIDIA, pairs with Parakeet)","Apple SpeechAnalyzer (macOS 26+, native, TBD)"] },
+  { n:2, title:"System Audio Capture", priority:"critical", effort:"medium",
+    problem:"Mic-only today. Can't capture the other side of Zoom/Meet/Slack calls.",
+    options:["BlackHole virtual driver + aggregate device","ScreenCaptureKit (PyObjC unreliable on macOS 15+)","Swift helper binary using ScreenCaptureKit (most reliable)"] },
+  { n:3, title:"Long Recording Chunking", priority:"critical", effort:"low",
+    problem:"Whisper hallucinates near boundaries on 2h+ recordings; memory pressure grows.",
+    options:["Explicit chunking with 5s overlap + dedupe","VAD-based split (silero-vad / webrtcvad)","Parakeet for long-form (CTC, no windowing)"] },
+  { n:4, title:"Audio Preprocessing Pipeline", priority:"important", effort:"medium",
+    problem:"Raw mic audio → 5-15% WER hit in noisy environments.",
+    options:["macOS Voice Isolation via AUVoiceIO (Apple Silicon, hardware-optimized)","AVCaptureDevice mic mode hint","noisereduce (spectral gating)","demucs (neural source separation)"] },
+  { n:5, title:"Hindi-English Code-Switching", priority:"important", effort:"low",
+    problem:"Standard Whisper mangles Hindi words in mixed conversations.",
+    options:["ai4bharat/indicwhisper (already integrated)","indic-conformer-600m-multilingual","Per-segment language detection + engine switch","Gemini post-processing pass"] },
+  { n:6, title:"Semantic Search Across Notes", priority:"important", effort:"medium",
+    problem:"After 50+ notes, finding old ones is impossible without grep.",
+    options:["Local embeddings (nomic-embed-text via MLX) + sqlite-vss/ChromaDB","Memosyne plugin integration","TF-IDF with whoosh/tantivy"] },
+  { n:7, title:"Apple SpeechAnalyzer as 4th Engine", priority:"nice", effort:"low",
+    problem:"Apple's on-device STT (macOS 26+): zero download, zero memory overhead, auto-updates.",
+    options:["Swift CLI helper, call from Python like a subprocess","Model after `hear` CLI pattern","Blocker: requires macOS 26"] },
+  { n:8, title:"Streaming / Real-Time Transcription", priority:"nice", effort:"high",
+    problem:"Batch today. Long meetings = long waits.",
+    options:["Chunked pipeline (30s windows while recording)","Parakeet MLX near-realtime on Apple Silicon","SpeechAnalyzer streaming (volatile + finalized)"] },
+  { n:9, title:"Meeting Type Templates", priority:"nice", effort:"low",
+    problem:"Standups, 1:1s, brainstorms need different extraction prompts.",
+    options:["Config-based prompt templates by type (DONE — prompts.json)","Auto-detect type from first 60s","Already have --type CLI flag"] },
+  { n:10, title:"Automatic Recording Triggers", priority:"nice", effort:"medium",
+    problem:"Forgetting to hit record.",
+    options:["Calendar integration (Zoom/Meet detection, EventKit/AppleScript)","Voice-activated start","Cron scheduled recordings"] },
+  { n:11, title:"Dedicated Settings Window", priority:"important", effort:"medium",
+    problem:"Menubar dropdown is overflowing as features grow. Need real form UI for diarization, system audio, calendar filters, permission states.",
+    options:["SwiftUI Settings scene + Yams reading config.yaml","Sidebar nav (Docker Desktop layout)","Menubar reduced to Start/Stop/Open Settings/Quit"] },
+];
+
+const labels = { critical:"Critical", important:"Important", nice:"Nice-to-have" };
+const LS_SEL = "chikki.improvements.selected";
+const LS_CTX = "chikki.improvements.context";
+const LS_BUNDLES = "chikki.improvements.bundles";
+
+const $ = id => document.getElementById(id);
+const grid = $("grid"), filters = $("filters"), ctx = $("context");
+const genBtn = $("generate"), copyBtn = $("copy"), saveBtn = $("save"), dlBtn = $("download");
+const resetBtn = $("reset"), output = $("output"), hint = $("hint"), toast = $("toast"), count = $("count");
+const selbar = $("selbar"), selCount = $("selCount"), selPills = $("selPills");
+const savedPanel = $("savedPanel"), savedList = $("savedList");
+
+let selected = loadJSON(LS_SEL, []); // ordered array of plan.n
+let activeFilter = "all";
+ctx.value = localStorage.getItem(LS_CTX) || "";
+
+function loadJSON(k, fb) { try { return JSON.parse(localStorage.getItem(k)) ?? fb; } catch { return fb; } }
+function saveJSON(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+
+function toggleSel(n) {
+  const i = selected.indexOf(n);
+  if (i === -1) selected.push(n); else selected.splice(i, 1);
+  saveJSON(LS_SEL, selected);
+}
+
+function render() {
+  grid.innerHTML = "";
+  const list = plans.filter(p => {
+    if (activeFilter === "all") return true;
+    if (["critical","important","nice"].includes(activeFilter)) return p.priority === activeFilter;
+    return p.effort === activeFilter;
+  });
+  count.textContent = `${list.length} of ${plans.length} plans`;
+  if (!list.length) { grid.innerHTML = '<div class="empty">No plans match this filter.</div>'; return; }
+  for (const p of list) {
+    const idx = selected.indexOf(p.n);
+    const isSel = idx !== -1;
+    const el = document.createElement("div");
+    el.className = "card" + (isSel ? " selected" : "");
+    el.innerHTML = `
+      <div class="order-badge">${idx + 1}</div>
+      <div class="head">
+        <div class="check"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div style="flex:1;">
+          <div class="row"><span class="num">#${p.n}</span><span class="title">${p.title}</span></div>
+        </div>
+      </div>
+      <div class="row">
+        <span class="tag ${p.priority}">${labels[p.priority]}</span>
+        <span class="tag effort-${p.effort}">Effort: ${p.effort[0].toUpperCase()+p.effort.slice(1)}</span>
+      </div>
+      <div class="problem">${p.problem}</div>
+      <details><summary>Options</summary>
+        <ul>${p.options.map(o => `<li>${o}</li>`).join("")}</ul>
+      </details>
+    `;
+    el.addEventListener("click", e => {
+      if (e.target.tagName === "SUMMARY" || e.target.closest("details")) return;
+      toggleSel(p.n);
+      updateUI();
+    });
+    grid.appendChild(el);
+  }
+}
+
+function updateUI() {
+  render();
+  const has = selected.length > 0;
+  genBtn.disabled = !has;
+  saveBtn.disabled = !has;
+  dlBtn.disabled = !has;
+  copyBtn.disabled = !output.textContent;
+  hint.textContent = has ? `${selected.length} selected` : "Select one or more cards above.";
+  if (has) {
+    selbar.style.display = "flex";
+    selCount.textContent = `${selected.length} selected, in order:`;
+    selPills.innerHTML = selected.map((n, i) => {
+      const p = plans.find(x => x.n === n);
+      return `<span class="pill">${i+1}. #${n} ${p.title}</span>`;
+    }).join(" ");
+  } else {
+    selbar.style.display = "none";
+  }
+}
+
+function buildPrompt() {
+  const picks = selected.map(n => plans.find(p => p.n === n));
+  const extra = ctx.value.trim();
+  const header = picks.length === 1
+    ? `I want to get started on improvement #${picks[0].n}: ${picks[0].title}.`
+    : `I want to plan work across ${picks.length} improvements, in this priority order:\n${picks.map((p,i) => `  ${i+1}. #${p.n} ${p.title}`).join("\n")}`;
+  const body = picks.map(p => `
+### #${p.n} ${p.title} (${labels[p.priority]}, effort: ${p.effort})
+Problem: ${p.problem}
+Options:
+${p.options.map(o => `- ${o}`).join("\n")}`).join("\n");
+  const ask = picks.length === 1
+    ? `Please propose a concrete plan: which option to pick, where it fits in the pipeline (recorder → transcriber → processor → output), what files change, and the smallest viable first PR. Flag open questions before writing code.`
+    : `For each item, propose: which option to pick, files touched, smallest viable first PR. Then suggest a sequencing — what depends on what, and what we should ship first. Flag open questions before writing code.`;
+  return `${header}\n${body}\n${extra ? `\nAdditional context from me:\n${extra}\n` : ""}\n${ask}`;
+}
+
+function showToast(msg) {
+  toast.textContent = msg;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 1300);
+}
+
+function renderSaved() {
+  const bundles = loadJSON(LS_BUNDLES, []);
+  if (!bundles.length) { savedPanel.style.display = "none"; return; }
+  savedPanel.style.display = "block";
+  savedList.innerHTML = bundles.map((b, i) => `
+    <div class="saved-item">
+      <div class="meta">
+        <div class="name">${b.name}</div>
+        <div class="when">${new Date(b.t).toLocaleString()} · ${b.picks.length} plan${b.picks.length>1?"s":""}: ${b.picks.map(n=>"#"+n).join(", ")}</div>
+      </div>
+      <button class="secondary" data-act="load" data-i="${i}">Load</button>
+      <button class="secondary" data-act="copy" data-i="${i}">Copy</button>
+      <button class="ghost" data-act="del" data-i="${i}">Delete</button>
+    </div>`).join("");
+}
+
+savedList.addEventListener("click", async e => {
+  const btn = e.target.closest("button"); if (!btn) return;
+  const i = +btn.dataset.i;
+  const bundles = loadJSON(LS_BUNDLES, []);
+  const b = bundles[i]; if (!b) return;
+  if (btn.dataset.act === "load") {
+    selected = [...b.picks]; ctx.value = b.context || "";
+    saveJSON(LS_SEL, selected); localStorage.setItem(LS_CTX, ctx.value);
+    output.textContent = b.prompt; output.style.display = "block";
+    updateUI(); copyBtn.disabled = false;
+    showToast("Loaded");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } else if (btn.dataset.act === "copy") {
+    await navigator.clipboard.writeText(b.prompt); showToast("Copied");
+  } else if (btn.dataset.act === "del") {
+    bundles.splice(i, 1); saveJSON(LS_BUNDLES, bundles); renderSaved();
+  }
+});
+
+filters.addEventListener("click", e => {
+  if (!e.target.classList.contains("chip")) return;
+  for (const c of filters.children) c.classList.remove("active");
+  e.target.classList.add("active");
+  activeFilter = e.target.dataset.filter;
+  render();
+});
+
+$("selectAll").addEventListener("click", () => {
+  const visible = plans.filter(p => {
+    if (activeFilter === "all") return true;
+    if (["critical","important","nice"].includes(activeFilter)) return p.priority === activeFilter;
+    return p.effort === activeFilter;
+  }).map(p => p.n);
+  for (const n of visible) if (!selected.includes(n)) selected.push(n);
+  saveJSON(LS_SEL, selected); updateUI();
+});
+
+$("clearSel").addEventListener("click", () => {
+  selected = []; saveJSON(LS_SEL, selected); updateUI();
+});
+
+ctx.addEventListener("input", () => localStorage.setItem(LS_CTX, ctx.value));
+
+genBtn.addEventListener("click", () => {
+  output.textContent = buildPrompt();
+  output.style.display = "block";
+  copyBtn.disabled = false;
+});
+
+copyBtn.addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(output.textContent); showToast("Copied"); }
+  catch {
+    const r = document.createRange(); r.selectNode(output);
+    window.getSelection().removeAllRanges(); window.getSelection().addRange(r);
+  }
+});
+
+saveBtn.addEventListener("click", () => {
+  const prompt = output.textContent || buildPrompt();
+  const defaultName = selected.length === 1
+    ? `#${selected[0]} ${plans.find(p=>p.n===selected[0]).title}`
+    : `Bundle of ${selected.length}: ${selected.map(n=>"#"+n).join(", ")}`;
+  const name = window.prompt("Name this bundle:", defaultName);
+  if (!name) return;
+  const bundles = loadJSON(LS_BUNDLES, []);
+  bundles.unshift({ name, t: Date.now(), picks: [...selected], context: ctx.value, prompt });
+  saveJSON(LS_BUNDLES, bundles);
+  output.textContent = prompt; output.style.display = "block"; copyBtn.disabled = false;
+  renderSaved(); showToast("Saved locally");
+});
+
+dlBtn.addEventListener("click", () => {
+  const prompt = output.textContent || buildPrompt();
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const fname = `chikki-plans-${selected.join("-")}-${stamp}.md`;
+  const blob = new Blob([prompt], { type: "text/markdown" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a"); a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  showToast("Downloaded");
+});
+
+resetBtn.addEventListener("click", () => {
+  selected = []; ctx.value = ""; output.textContent = ""; output.style.display = "none";
+  saveJSON(LS_SEL, selected); localStorage.removeItem(LS_CTX); updateUI();
+});
+
+$("clearSaved").addEventListener("click", () => {
+  if (!confirm("Delete all saved bundles?")) return;
+  localStorage.removeItem(LS_BUNDLES); renderSaved();
+});
+
+renderSaved(); updateUI();
+</script>
+</body>
+</html>
