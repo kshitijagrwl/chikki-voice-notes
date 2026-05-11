@@ -17,11 +17,13 @@ struct MenuBarView: View {
                         Text(next.title)
                             .font(.caption)
                             .lineLimit(1)
+                            .truncationMode(.tail)
                         Text(countdownLabel(for: next.startDate))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .monospacedDigit()
                     }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
@@ -101,6 +103,8 @@ struct MenuBarView: View {
                     Text(lastNote)
                         .font(.caption)
                         .lineLimit(3)
+                        .truncationMode(.tail)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 .padding(.horizontal, 8)
                 .padding(.vertical, 2)
@@ -121,7 +125,7 @@ struct MenuBarView: View {
             .keyboardShortcut("q")
         }
         .padding(.vertical, 4)
-        .frame(minWidth: 260)
+        .frame(width: 280)
     }
 }
 
