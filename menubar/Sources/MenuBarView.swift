@@ -3,9 +3,32 @@ import KeyboardShortcuts
 
 struct MenuBarView: View {
     @EnvironmentObject var recorder: RecordingManager
+    @EnvironmentObject var calendar: CalendarWatcher
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            // MARK: Upcoming meeting (auto-record)
+
+            if calendar.isWatching, let next = calendar.nextMeeting {
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(next.title)
+                            .font(.caption)
+                            .lineLimit(1)
+                        Text(countdownLabel(for: next.startDate))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .monospacedDigit()
+                    }
+                }
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+
+                Divider()
+            }
+
             // MARK: Primary action
 
             if recorder.isRecording {
@@ -99,6 +122,20 @@ struct MenuBarView: View {
         }
         .padding(.vertical, 4)
     }
+}
+
+private func countdownLabel(for date: Date) -> String {
+    let secs = Int(date.timeIntervalSinceNow)
+    if secs <= 0 { return "Starting now" }
+    if secs < 60 { return "Starts in \(secs)s" }
+    let m = secs / 60
+    let s = secs % 60
+    if m < 60 {
+        return String(format: "Starts in %d:%02d", m, s)
+    }
+    let h = m / 60
+    let mm = m % 60
+    return String(format: "Starts in %dh %02dm", h, mm)
 }
 
 enum StepState {

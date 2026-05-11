@@ -56,7 +56,7 @@ struct SettingsView: View {
                 case .transcription: StubPane(title: "Transcription", note: "Engine + language settings coming in a future PR.")
                 case .diarization:   DiarizationPane()
                 case .processing:    StubPane(title: "Processing", note: "LLM provider/model & prompt tuning.")
-                case .calendar:      StubPane(title: "Calendar", note: "Auto-record from calendar events (#10).")
+                case .calendar:      CalendarPane()
                 case .shortcuts:     ShortcutsPane()
                 case .permissions:   PermissionsPane()
                 case .about:         AboutPane()
@@ -303,6 +303,134 @@ private struct DiarizationPane: View {
             if let v = store.diarizationMinSpeakers { hasMin = true; minSpeakers = v } else { hasMin = false }
             if let v = store.diarizationMaxSpeakers { hasMax = true; maxSpeakers = v } else { hasMax = false }
             hasToken = store.hasHFToken()
+        }
+    }
+}
+
+// MARK: - Calendar pane
+
+private struct CalendarPane: View {
+    @ObservedObject private var store = ConfigStore.shared
+    @EnvironmentObject private var watcher: CalendarWatcher
+
+    @State private var autoRecord: Bool = false
+    @State private var leadTime: Int = 10
+    @State private var trailingBuffer: Int = 60
+    @State private var requireConfLink: Bool = true
+
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.dateStyle = .none
+        f.timeStyle = .short
+        return f
+    }()
+
+    var body: some View {
+        Form {
+            Section("Auto-record") {
+                Toggle("Auto-record meetings", isOn: $autoRecord)
+                    .onChange(of: autoRecord) { _, newValue in
+                        store.calendarAutoRecordEnabled = newValue
+                        if newValue {
+                            watcher.startWatching()
+                        } else {
+                            watcher.stopWatching()
+                        }
+                    }
+                Text("Starts recording automatically when an upcoming calendar event begins. A 10-second grace notification lets you cancel.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Filter") {
+                Toggle("Only events with video-conference links", isOn: $requireConfLink)
+                    .onChange(of: requireConfLink) { _, newValue in
+                        store.calendarRequireConfLink = newValue
+                    }
+                Text("Matches zoom.us, meet.google.com, teams.microsoft.com, webex.com in the event's location, URL, or notes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Timing") {
+                Stepper("Lead time: \(leadTime)s", value: $leadTime, in: 0...120, step: 5)
+                    .onChange(of: leadTime) { _, newValue in
+                        store.calendarLeadTimeSec = newValue
+                    }
+                Stepper("Trailing buffer: \(trailingBuffer)s", value: $trailingBuffer, in: 0...600, step: 15)
+                    .onChange(of: trailingBuffer) { _, newValue in
+                        store.calendarTrailingBufferSec = newValue
+                    }
+                Text("Lead time is how long Chikki waits (with a Cancel option) before starting. Trailing buffer is how long recording continues past the scheduled end.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Status") {
+                LabeledContent("Calendar permission") {
+                    HStack(spacing: 10) {
+                        Circle()
+                            .fill(authColor)
+                            .frame(width: 8, height: 8)
+                        Text(authLabel)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        if watcher.authState == .notDetermined {
+                            Button("Request access") {
+                                Task { await watcher.requestAccess() }
+                            }
+                        } else {
+                            Button("Open System Settings…") {
+                                if let u = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars") {
+                                    NSWorkspace.shared.open(u)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                LabeledContent("Next meeting") {
+                    if let n = watcher.nextMeeting {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text(n.title)
+                                .lineLimit(1)
+                            Text(Self.timeFormatter.string(from: n.startDate))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    } else if watcher.isWatching {
+                        Text("No upcoming meetings")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        Text("Watcher disabled")
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .onAppear {
+            store.reload()
+            autoRecord = store.calendarAutoRecordEnabled
+            leadTime = store.calendarLeadTimeSec
+            trailingBuffer = store.calendarTrailingBufferSec
+            requireConfLink = store.calendarRequireConfLink
+        }
+    }
+
+    private var authLabel: String {
+        switch watcher.authState {
+        case .granted: return "Granted"
+        case .denied: return "Denied"
+        case .notDetermined: return "Not Determined"
+        }
+    }
+
+    private var authColor: Color {
+        switch watcher.authState {
+        case .granted: return .green
+        case .denied: return .red
+        case .notDetermined: return .orange
         }
     }
 }
