@@ -121,6 +121,7 @@ struct MenuBarView: View {
             .keyboardShortcut("q")
         }
         .padding(.vertical, 4)
+        .frame(minWidth: 260)
     }
 }
 

@@ -23,6 +23,7 @@ struct ChikkiApp: App {
                 .symbolRenderingMode(.palette)
                 .foregroundStyle(recorder.isRecording ? .red : .primary)
         }
+        .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView()
