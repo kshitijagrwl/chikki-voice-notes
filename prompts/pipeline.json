@@ -1,0 +1,7 @@
+{
+  "_description": "Pipeline-stage prompt fragments. These are prepended/woven into meeting-type system prompts — not separate LLM calls.",
+
+  "hinglish_fix": {
+    "instructions": "The transcript may contain English-Hindi code-switched speech with transliteration errors typical of English-language ASR (e.g., 'humein' rendered as 'who may'). Mentally correct these to the speaker's likely intent before extracting structured information. Treat Hindi words written in Latin script as valid words; do not flag them as errors."
+  }
+}

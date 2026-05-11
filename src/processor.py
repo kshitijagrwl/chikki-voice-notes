@@ -1,6 +1,7 @@
 """LLM-based processing of transcripts into structured meeting notes.
 
-Loads prompt templates from prompts.json. Meeting type selectable via --type flag.
+Loads prompt templates from prompts/meetings.json and pipeline fragments from
+prompts/pipeline.json. Meeting type selectable via --type flag.
 Supports multiple LLM providers: gemini, openai, anthropic — set via config.yaml.
 """
 
@@ -16,14 +17,22 @@ from datetime import datetime
 from .config import CONFIG
 
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_PROMPTS_PATH = os.path.join(_BASE_DIR, "prompts.json")
+_MEETINGS_PROMPTS_PATH = os.path.join(_BASE_DIR, "prompts", "meetings.json")
+_PIPELINE_PROMPTS_PATH = os.path.join(_BASE_DIR, "prompts", "pipeline.json")
 
 
 def load_prompts() -> dict:
-    with open(_PROMPTS_PATH) as f:
+    with open(_MEETINGS_PROMPTS_PATH) as f:
         prompts = json.load(f)
     prompts.pop("_description", None)
     return prompts
+
+
+def _load_pipeline_prompts() -> dict:
+    with open(_PIPELINE_PROMPTS_PATH) as f:
+        pipeline = json.load(f)
+    pipeline.pop("_description", None)
+    return pipeline
 
 
 def available_types() -> dict:
@@ -93,6 +102,11 @@ class Processor:
             )
         self._system_prompt = prompts[self._type]["system_prompt"]
         self._type_name = prompts[self._type]["name"]
+
+        if self._cfg.get("fix_hinglish", True):
+            pipeline = _load_pipeline_prompts()
+            hinglish_instructions = pipeline["hinglish_fix"]["instructions"]
+            self._system_prompt = hinglish_instructions + "\n\n" + self._system_prompt
 
     @property
     def meeting_type(self):

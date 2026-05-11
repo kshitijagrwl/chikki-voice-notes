@@ -12,7 +12,7 @@ Chikki — voice recording, transcription, and meeting notes pipeline for macOS.
 - LLM: Google Gemini / OpenAI / Anthropic (`google-genai` / `openai` / `anthropic`) — provider set via `config.yaml`, API key in `.env`
 - Menu bar: Native Swift app (`menubar/`) with KeyboardShortcuts lib
 - CLI: `click` with live progress timers
-- Config: `config.yaml` (runtime settings) + `prompts.json` (meeting type templates)
+- Config: `config.yaml` (runtime settings) + `prompts/meetings.json` (meeting type templates) + `prompts/pipeline.json` (pipeline-stage prompt fragments)
 
 ## Architecture
 
@@ -23,7 +23,7 @@ Each stage is independent. Transcriber supports multiple engines (whisper, indic
 ## Key Paths
 
 - Config: `config.yaml` (all runtime settings)
-- Prompts: `prompts.json` (meeting type templates — edit without code changes)
+- Prompts: `prompts/meetings.json` (meeting type templates) + `prompts/pipeline.json` (pipeline-stage fragments) — edit without code changes
 - API keys: `.env` (loaded by `src/config.py`)
 - Notes output: `notes/`
 - Raw transcripts: `transcripts/` (.txt + .json for reprocessing)
@@ -47,7 +47,7 @@ Key flags: `--engine/-e` (transcription engine), `--type/-t` (meeting type), `--
 
 - No venv — use conda env `chikki` (see `environment.yml`)
 - All config in `config.yaml`, API keys in `.env`
-- Prompts in `prompts.json`, not hardcoded in Python — edit freely
+- Prompts in `prompts/meetings.json` (meeting types) and `prompts/pipeline.json` (pipeline stages), not hardcoded in Python — edit freely
 - Raw transcripts always saved alongside notes for reprocessing
 - Debug `print()` calls go to stderr, stdout is reserved for clean output (menu bar app reads stdout)
 - Architecture decisions go in `docs/adr/NNN-slug.md`
