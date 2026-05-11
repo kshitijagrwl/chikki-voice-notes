@@ -148,6 +148,41 @@ final class ConfigStore: ObservableObject {
         }
     }
 
+    // MARK: - Calendar
+
+    var calendarAutoRecordEnabled: Bool {
+        get { bool("calendar", "auto_record_enabled", default: false) }
+        set { setBool("calendar", "auto_record_enabled", newValue); save() }
+    }
+
+    var calendarLeadTimeSec: Int {
+        get { ((rawConfig["calendar"] as? [String: Any])?["lead_time_sec"] as? Int) ?? 10 }
+        set {
+            var sec = self.section("calendar")
+            sec["lead_time_sec"] = newValue
+            rawConfig["calendar"] = sec
+            objectWillChange.send()
+            save()
+        }
+    }
+
+    var calendarTrailingBufferSec: Int {
+        get { ((rawConfig["calendar"] as? [String: Any])?["trailing_buffer_sec"] as? Int) ?? 60 }
+        set {
+            var sec = self.section("calendar")
+            sec["trailing_buffer_sec"] = newValue
+            rawConfig["calendar"] = sec
+            objectWillChange.send()
+            save()
+        }
+    }
+
+    var calendarRequireConfLink: Bool {
+        get { bool("calendar", "require_conf_link", default: true) }
+        set { setBool("calendar", "require_conf_link", newValue); save() }
+    }
+
+
     /// Does `.env` at the project root contain an HF_TOKEN line?
     func hasHFToken() -> Bool {
         let envPath = "\(projectDir)/.env"

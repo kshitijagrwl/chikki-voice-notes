@@ -14,5 +14,9 @@
     <string>1.0.0</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Chikki needs microphone access to record voice notes and meetings.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>Chikki reads upcoming calendar events to auto-start recording for meetings with a video-conference link.</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>Chikki reads upcoming calendar events to auto-start recording for meetings with a video-conference link.</string>
 </dict>
 </plist>

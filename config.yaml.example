@@ -70,3 +70,17 @@ menubar:
   show_timer: true
   sound_on_start: true
   sound_on_stop: true
+
+calendar:
+  # Auto-record meetings from the system Calendar via EventKit. When enabled,
+  # Chikki polls upcoming events and starts recording at the scheduled start
+  # (with a configurable grace period and a Cancel notification action).
+  auto_record_enabled: false
+  # Seconds of grace before auto-recording fires. The notification's Cancel
+  # button is active during this window.
+  lead_time_sec: 10
+  # Seconds of additional recording past the event's scheduled end date.
+  trailing_buffer_sec: 60
+  # Only trigger for events with a video-conference link (zoom.us,
+  # meet.google.com, teams.microsoft.com, webex.com) in location/url/notes.
+  require_conf_link: true
